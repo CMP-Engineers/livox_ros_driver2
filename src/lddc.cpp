@@ -62,13 +62,13 @@ Lddc::Lddc(int format, int multi_topic, int data_src, int output_type,
 }
 #elif defined BUILDING_ROS2
 Lddc::Lddc(int format, int multi_topic, int data_src, int output_type,
-           double frq, std::string &frame_id)
+           double frq, std::vector<std::string> frame_ids)
     : transfer_format_(format),
       use_multi_topic_(multi_topic),
       data_src_(data_src),
       output_type_(output_type),
-      publish_frq_(frq),
-      frame_id_(frame_id) {
+      publish_frq_(frq) {
+  frame_ids_ = frame_ids;
   publish_period_ns_ = kNsPerSecond / publish_frq_;
   lds_ = nullptr;
 #if 0
@@ -133,7 +133,7 @@ void Lddc::DistributePointCloudData(void) {
     if ((kConnectStateSampling != lidar->connect_state) || (p_queue == nullptr)) {
       continue;
     }
-    PollingLidarPointCloudData(lidar_id, lidar);    
+    PollingLidarPointCloudData(lidar_id, lidar, frame_ids_[lidar_id]);    
   }
 }
 
@@ -159,7 +159,7 @@ void Lddc::DistributeImuData(void) {
   }
 }
 
-void Lddc::PollingLidarPointCloudData(uint8_t index, LidarDevice *lidar) {
+void Lddc::PollingLidarPointCloudData(uint8_t index, LidarDevice *lidar, std::string &frame_id) {
   LidarDataQueue *p_queue = &lidar->data;
   if (p_queue == nullptr || p_queue->storage_packet == nullptr) {
     return;
@@ -167,7 +167,7 @@ void Lddc::PollingLidarPointCloudData(uint8_t index, LidarDevice *lidar) {
 
   while (!lds_->IsRequestExit() && !QueueIsEmpty(p_queue)) {
     if (kPointCloud2Msg == transfer_format_) {
-      PublishPointcloud2(p_queue, index);
+      PublishPointcloud2(p_queue, index, frame_id);
     } else if (kLivoxCustomMsg == transfer_format_) {
       PublishCustomPointcloud(p_queue, index);
     } else if (kPclPxyziMsg == transfer_format_) {
@@ -198,7 +198,7 @@ void Lddc::PrepareExit(void) {
   }
 }
 
-void Lddc::PublishPointcloud2(LidarDataQueue *queue, uint8_t index) {
+void Lddc::PublishPointcloud2(LidarDataQueue *queue, uint8_t index, std::string &frame_id) {
   while(!QueueIsEmpty(queue)) {
     StoragePacket pkg;
     QueuePop(queue, &pkg);
@@ -209,7 +209,7 @@ void Lddc::PublishPointcloud2(LidarDataQueue *queue, uint8_t index) {
 
     PointCloud2 cloud;
     uint64_t timestamp = 0;
-    InitPointcloud2Msg(pkg, cloud, timestamp);
+    InitPointcloud2Msg(pkg, cloud, timestamp, frame_id);
     PublishPointcloud2Data(index, timestamp, cloud);
   }
 }
@@ -259,8 +259,8 @@ void Lddc::PublishPclMsg(LidarDataQueue *queue, uint8_t index) {
   return;
 }
 
-void Lddc::InitPointcloud2MsgHeader(PointCloud2& cloud) {
-  cloud.header.frame_id.assign(frame_id_);
+void Lddc::InitPointcloud2MsgHeader(PointCloud2& cloud, std::string &frame_id) {
+  cloud.header.frame_id.assign(frame_id);
   cloud.height = 1;
   cloud.width = 0;
   cloud.fields.resize(7);
@@ -295,8 +295,8 @@ void Lddc::InitPointcloud2MsgHeader(PointCloud2& cloud) {
   cloud.point_step = sizeof(LivoxPointXyzrtlt);
 }
 
-void Lddc::InitPointcloud2Msg(const StoragePacket& pkg, PointCloud2& cloud, uint64_t& timestamp) {
-  InitPointcloud2MsgHeader(cloud);
+void Lddc::InitPointcloud2Msg(const StoragePacket& pkg, PointCloud2& cloud, uint64_t& timestamp, std::string &frame_id) {
+  InitPointcloud2MsgHeader(cloud, frame_id);
 
   cloud.point_step = sizeof(LivoxPointXyzrtlt);
 
@@ -352,7 +352,7 @@ void Lddc::PublishPointcloud2Data(const uint8_t index, const uint64_t timestamp,
 }
 
 void Lddc::InitCustomMsg(CustomMsg& livox_msg, const StoragePacket& pkg, uint8_t index) {
-  livox_msg.header.frame_id.assign(frame_id_);
+  livox_msg.header.frame_id.assign(frame_ids_[0]);
 
 #ifdef BUILDING_ROS1
   static uint32_t msg_seq = 0;

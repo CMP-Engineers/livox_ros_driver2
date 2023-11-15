@@ -76,7 +76,7 @@ class Lddc final {
       std::string &frame_id, bool lidar_bag, bool imu_bag);
 #elif defined BUILDING_ROS2
   Lddc(int format, int multi_topic, int data_src, int output_type, double frq,
-      std::string &frame_id);
+      std::vector<std::string> frame_ids);
 #endif
   ~Lddc();
 
@@ -97,17 +97,17 @@ class Lddc final {
   Lds *lds_;
 
  private:
-  void PollingLidarPointCloudData(uint8_t index, LidarDevice *lidar);
+  void PollingLidarPointCloudData(uint8_t index, LidarDevice *lidar, std::string &frame_id);
   void PollingLidarImuData(uint8_t index, LidarDevice *lidar);
 
-  void PublishPointcloud2(LidarDataQueue *queue, uint8_t index);
+  void PublishPointcloud2(LidarDataQueue *queue, uint8_t index, std::string &frame_id);
   void PublishCustomPointcloud(LidarDataQueue *queue, uint8_t index);
   void PublishPclMsg(LidarDataQueue *queue, uint8_t index);
 
   void PublishImuData(LidarImuDataQueue& imu_data_queue, const uint8_t index);
 
-  void InitPointcloud2MsgHeader(PointCloud2& cloud);
-  void InitPointcloud2Msg(const StoragePacket& pkg, PointCloud2& cloud, uint64_t& timestamp);
+  void InitPointcloud2MsgHeader(PointCloud2& cloud, std::string &frame_id);
+  void InitPointcloud2Msg(const StoragePacket& pkg, PointCloud2& cloud, uint64_t& timestamp, std::string &frame_id);
   void PublishPointcloud2Data(const uint8_t index, uint64_t timestamp, const PointCloud2& cloud);
 
   void InitCustomMsg(CustomMsg& livox_msg, const StoragePacket& pkg, uint8_t index);
@@ -138,7 +138,7 @@ class Lddc final {
   uint8_t output_type_;
   double publish_frq_;
   uint32_t publish_period_ns_;
-  std::string frame_id_;
+  std::vector<std::string> frame_ids_;
 
 #ifdef BUILDING_ROS1
   bool enable_lidar_bag_;
